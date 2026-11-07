@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon with context %}
+{% block title %}API{% endblock %}
+{% block heading %}REST API{% endblock %}
+{% block subheading %}JSON in/out at /api/v1 · authenticated with your personal API key.{% endblock %}
+{% block content %}
+<section class="grid-2 api-top">
+  <div class="card" id="key-card">
+    <div class="card-head"><h3>{{ icon('key') }}Your API key</h3><span class="badge badge-indigo">SHA-256 hashed at rest</span></div>
+    <div class="key-row">
+      <code class="key-box" id="key-box" data-prefix="{{ key.prefix if key else '' }}">{{ (key.prefix ~ '••••••••••••••••••••••••') if key else 'No key yet' }}</code>
+      <button class="icon-btn" id="key-reveal" title="Show / hide" aria-label="Show or hide key" disabled>{{ icon('eye') }}</button>
+      <button class="icon-btn" id="key-copy" title="Copy" aria-label="Copy key" disabled>{{ icon('copy') }}</button>
+    </div>
+    <p class="muted small" id="key-note">
+      {% if key %}Created {{ key.created_at.strftime('%d %b %Y %H:%M') }} UTC · last used {{ key.last_used_at.strftime('%d %b %H:%M') if key.last_used_at else 'never' }}.{% endif %}
+      Only a hash is stored, so the full key is shown <b>once</b>, right after you regenerate it.
+    </p>
+    <button class="btn btn-primary" id="key-regen">{{ icon('refresh') }}Regenerate key</button>
+  </div>
+  <div class="card">
+    <div class="card-head"><h3>{{ icon('list') }}Endpoints</h3><span class="muted small">errors: {"error": {"code", "message"}}</span></div>
+    <ul class="endpoints">
+      <li><span class="method post">POST</span><code>/api/v1/ask</code><span class="muted small">Ask a question · key · {{ config.RATE_LIMIT }}</span></li>
+      <li><span class="method get">GET</span><code>/api/v1/history</code><span class="muted small">Your saved conversations · key · ?limit&amp;offset</span></li>
+      <li><span class="method get">GET</span><code>/api/v1/health</code><span class="muted small">Service + model status · public</span></li>
+    </ul>
+    <pre class="code small" id="curl-example">curl -X POST http://127.0.0.1:5000/api/v1/ask \
+  -H "X-API-Key: <span id="curl-key">YOUR_KEY</span>" -H "Content-Type: application/json" \
+  -d '{"question": "What is Munnar famous for?"}'</pre>
+  </div>
+</section>
+
+<section class="card" id="playground">
+  <div class="card-head wrap"><h3>{{ icon('zap') }}API playground</h3>
+    <div class="seg" id="pg-examples" role="group" aria-label="Example requests">
+      <button data-ex="valid" class="on">Valid ask</button><button data-ex="nokey">Missing key</button>
+      <button data-ex="invalid">Invalid body</button><button data-ex="history">History</button><button data-ex="health">Health</button>
+    </div>
+  </div>
+  <div class="grid-2 pg-grid">
+    <div>
+      <div class="pg-req"><span class="method" id="pg-method">POST</span><code id="pg-url">/api/v1/ask</code></div>
+      <label class="field"><span>Headers</span><pre class="code small" id="pg-headers"></pre></label>
+      <label class="field"><span>Body (JSON)</span><textarea id="pg-body" class="mono" rows="5" spellcheck="false"></textarea></label>
+      <button class="btn btn-primary" id="pg-send">{{ icon('send') }}Send request</button>
+    </div>
+    <div>
+      <div class="pg-res-head"><span>Response</span><span class="badge" id="pg-status">-</span><span class="muted small" id="pg-time"></span></div>
+      <pre class="code json-out" id="pg-response">Pick an example and press “Send request”.</pre>
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/api.js') }}"></script>{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon with context %}
+{% block title %}Conversation #{{ c.id }}{% endblock %}
+{% block heading %}Conversation #{{ c.id }}{% endblock %}
+{% block subheading %}Loaded from the database · {{ c.created_at.strftime('%d %b %Y %H:%M') }} UTC{% endblock %}
+{% block content %}
+<a class="btn btn-ghost btn-sm back-link" href="{{ url_for('main.history') }}">{{ icon('arrow-right', 'flip') }}Back to history</a>
+<section class="card detail">
+  <div class="msg msg-user static"><span class="avatar sm">{{ current_user.username[:1]|upper }}</span><p>{{ c.question }}</p></div>
+  <div class="msg msg-ai static">
+    <div class="msg-meta">{% include "_status_badge.html" %}<span class="tag">{{ c.provider }}</span><span class="tag">{{ c.channel }}</span><span class="muted small">{{ (c.latency_ms/1000)|round(2) }} s</span></div>
+    <p class="answer">{{ c.answer }}</p>
+  </div>
+  {% if c.sources %}
+  <h3 class="section-title">{{ icon('file') }}Sources</h3>
+  <div class="sources static">
+    {% for s in c.sources %}
+    <article class="source">
+      <header><span class="cite">[{{ s.n }}]</span><b>{{ s.title }}</b><span class="muted small">chunk #{{ s.chunk_id }}</span><span class="score">{{ '%.2f'|format(s.score) }}</span></header>
+      <p>{{ s.text }}</p>
+      <a href="{{ s.url }}" target="_blank" rel="noopener noreferrer" class="small">Wikipedia{{ icon('external') }}</a>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
