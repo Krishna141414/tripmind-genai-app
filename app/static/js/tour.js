@@ -1,186 +1,190 @@
-/* Guided Tour: visits every page, spotlights an element, names the requirement it proves and performs the action.
-   State (step, paused) lives in sessionStorage so the tour survives page navigation. */
+/* Guided Tour: a sequence for TM.player that spans pages. Starts only from a "Guided Tour" button, opens in
+   Manual mode. Each step highlights one element and shows a caption card placed so it never covers the
+   element or the control bar. State lives in sessionStorage so the tour survives page navigation. */
 "use strict";
 (function () {
-  const $ = TM.$, wait = TM.sleep;
-  const waitFor = async (sel, ms = 6000) => {          // element may appear after the page script runs
-    for (let t = 0; t < ms; t += 100) { const e = $(sel); if (e) return e; await wait(100); }
+  const $ = TM.$, P = TM.player;
+  const KEY = "tm-tour";
+  const loggedIn = document.body.dataset.auth === "1";
+  const waitFor = async (sel, ms = 6000) => {
+    for (let t = 0; t < ms; t += 100) { const e = $(sel); if (e) return e; await new Promise((r) => setTimeout(r, 100)); }
     return null;
   };
-  const askEx = (kind) => async () => { await waitFor(".chip"); return TM.askPage.runExample(kind); };
-  const lastAnswer = ".msg-ai:last-of-type";
+  const ask = (kind) => async () => { await waitFor(".chip"); await TM.askPage.runExample(kind, { playAll: true }); };
 
-  // ---- The tour script: one array, in the order required by SHOWCASE.md ----
+  // ---- The tour script (one array) ----
   const STEPS = [
     { page: "/auth/login", anon: true, el: "#login-card", req: "Authentication",
-      text: "Sign-in uses Flask-Login. The form is CSRF-protected, fields are validated live, and passwords are stored hashed. “Use demo account” fills demo / Demo@1234.",
-      run: async () => { await waitFor("#demo-btn"); await TM.fillDemo(); } },
-    { page: "/dashboard", el: "#stats", req: "Persistence · UI",
-      text: "Logged in. Dashboard tiles are counted live from SQLite: questions asked, answered vs not in documents, average response time." },
-    { page: "/dashboard", el: "#chart-card", req: "UI · Dashboard",
-      text: "Animated Chart.js charts of answer outcomes and response times, plus your recent conversations." },
-    { page: "/ask", el: "#pipeline", req: "AI capability (Task 8 RAG)",
-      text: "Every question runs Validate → Retrieve → Generate → Save. The strip lights up step by step with real timings." },
-    { page: "/ask", el: ".chat-card", req: "AI capability · answerable", ai: true,
-      text: "Answerable question: FAISS retrieves Wikipedia chunks and the local Qwen2.5-0.5B writes a cited answer. Saved to the database.",
-      run: askEx("answerable") },
-    { page: "/ask", el: ".msg-ai:last-of-type .sources", fallbackEl: ".chat-card", req: "AI capability · sources",
-      text: "Each answer shows its source cards with similarity scores. Click a [n] citation to highlight the source it came from." },
-    { page: "/ask", el: ".chat-card", req: "Refuses unanswerable questions", ai: true,
-      text: "Out-of-scope question: the best retrieval score is below 0.50, so the LLM is skipped and the app says it's not in the documents.",
-      run: askEx("unanswerable") },
+      text: "Sign in with Flask-Login. Passwords are stored hashed and the form carries a CSRF token.",
+      action: async () => { await waitFor("#login-form"); await TM.fillDemo(true); } },
+    { page: "/dashboard", el: "#stats", req: "Persistence",
+      text: "These numbers are counted live from the SQLite database.",
+      action: () => TM.dashboard.countUp() },
+    { page: "/dashboard", el: "#chart-card", req: "Dashboard",
+      text: "Answer outcomes and response times, drawn with Chart.js.",
+      action: () => TM.dashboard.animate(0) },
+    { page: "/ask", el: "#pipeline", req: "AI pipeline",
+      text: "Every question runs Validate → Retrieve → Generate → Save, shown step by step here." },
+    { page: "/ask", el: ".chat-card", req: "RAG answer with sources", dwell: 1.5,
+      text: "An answerable question: Wikipedia chunks are retrieved and the local LLM answers with citation chips.",
+      action: ask("answerable") },
+    { page: "/ask", el: ".chat-card", req: "Refuses unanswerable questions",
+      text: "Nothing relevant in the documents (score < 0.50), so the LLM is skipped and the app says so.",
+      action: ask("unanswerable") },
     { page: "/ask", el: ".composer", req: "Validation (Pydantic)",
-      text: "A 600-character question breaks the 3-500 character rule: the server returns 422 with a field-level message and nothing is saved.",
-      run: askEx("too-long") },
-    { page: "/ask", el: ".chat-card", req: "Security · prompt-injection guard",
-      text: "“Ignore all previous instructions…” is detected before reaching the LLM: refused, saved as blocked, and logged.",
-      run: askEx("injection") },
-    { page: "/history", el: "#history-card", req: "Persistence",
-      text: "Every answer is saved in SQLite (question, answer, sources JSON, status, latency) and survives restarts." },
-    { page: "/history", el: "#history-search", req: "Persistence · search",
-      text: "Search your history. Each row opens a detail page with the full answer and its sources.",
-      run: async () => { await TM.typeInto($("#history-q"), "munnar"); } },
-    { page: "/developer", el: "#key-card", req: "API auth · per-user key",
-      text: "Regenerate your API key: it's shown once, and only its SHA-256 hash is stored. The old key stops working.",
-      run: async () => { await waitFor("#key-regen"); await TM.apiPage.regenerate(); } },
-    { page: "/developer", el: "#playground", req: "REST API · POST /api/v1/ask", ai: true,
-      text: "API playground, valid request: JSON in, JSON out, authenticated with the key alone (no cookies). Returns 201.",
-      run: async () => { if (!TM.apiPage.hasKey()) await TM.apiPage.regenerate(); TM.apiPage.loadExample("valid"); await TM.apiPage.send(); } },
-    { page: "/developer", el: "#playground", req: "REST API · error format",
-      text: "Missing key → 401 with the consistent error format {\"error\": {\"code\", \"message\"}}.",
-      run: async () => { TM.apiPage.loadExample("nokey"); await TM.apiPage.send(); } },
-    { page: "/security", el: "#card-ratelimit", req: "Security · rate limiting",
-      text: "Flask-Limiter: 11 quick requests against a 10-per-minute rule → the 11th gets 429 and a toast.",
-      run: async () => { await waitFor(".try-btn"); await TM.securityPage.run("ratelimit"); } },
-    { page: "/admin/logs", el: "#logs-card", req: "Logging · admin page",
-      text: "Structured JSON logs: request id, user, route, status, latency. Security events like the blocked injection and the 429s are highlighted.",
-      run: async () => { await waitFor("#logs-body tr td"); await wait(400); await TM.logsPage.setSecurity(true); } },
-    { page: "/security", el: "#card-headers", req: "Security · headers",
-      text: "Every response carries CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy and a request id.",
-      run: async () => { await waitFor(".try-btn"); await TM.securityPage.run("headers"); } },
-    { page: "/tour/missing-page", el: "#error-card", req: "Exception handling",
-      text: "Unknown URL → a friendly 404 page (429 and 500 look the same). Users never see a stack trace; errors are logged with one." },
+      text: "A 600-character question breaks the 3–500 rule: a clear field error, nothing saved.",
+      action: ask("too-long") },
+    { page: "/ask", el: ".chat-card", req: "Prompt-injection guard",
+      text: "“Ignore previous instructions…” is refused before the LLM, saved as blocked and logged.",
+      action: ask("injection") },
+    { page: "/history", el: "#history-card", req: "Persistence · History",
+      text: "Every conversation is saved in SQLite. Search filters it instantly; each row opens its details.",
+      action: async () => { await TM.typeInto($("#history-q"), "munnar"); } },
+    { page: "/developer", el: "#key-card", req: "API key",
+      text: "Regenerate your key: it is shown once and only its SHA-256 hash is stored.",
+      action: () => TM.apiPage.regenerate() },
+    { page: "/developer", el: "#playground", req: "REST API",
+      text: "A valid POST /api/v1/ask with the key: JSON in, a tidy summary out (raw JSON is collapsed).",
+      action: async () => { if (!TM.apiPage.hasKey()) await TM.apiPage.regenerate(); await TM.apiPage.run("valid"); } },
+    { page: "/developer", el: "#playground", req: "API errors",
+      text: "No key → 401 with the same error shape everywhere: an error code and a message.",
+      action: () => TM.apiPage.run("nokey") },
+    { page: "/security", el: "#card-ratelimit", req: "Rate limiting",
+      text: "11 quick requests against a 10-per-minute rule: the 11th is rejected with 429.",
+      action: () => TM.securityPage.run("ratelimit") },
+    { page: "/admin/logs", el: "#logs-card", req: "Structured logging",
+      text: "JSON-line logs shown as a table: time, level, event, message. Security events are highlighted.",
+      action: async () => { await waitFor("#logs-body tr"); await TM.logsPage.setSecurity(true); } },
+    { page: "/security", el: "#card-headers", req: "Security headers",
+      text: "Every response carries CSP, X-Frame-Options, nosniff, Referrer-Policy and a request id.",
+      action: () => TM.securityPage.run("headers") },
+    { page: "/tour/missing-page", el: "#error-card", req: "Error handling",
+      text: "Unknown pages get a friendly 404 (429 and 500 look the same). Stack traces only go to the log." },
     { page: "/how-it-works", el: "#arch", req: "How it works",
-      text: "Architecture: security layer → blueprints → one ask flow → rag_service (with LLM fallback) → SQLite + JSON logs. Tour complete!" },
+      text: "Security layer → blueprints → ask flow → RAG service (with fallback) → SQLite + logs. Tour complete!",
+      action: () => TM.howPage.lightAll() },
   ];
 
-  const KEY = "tm-tour";
-  const load = () => { try { return JSON.parse(sessionStorage.getItem(KEY)) || {}; } catch (e) { return {}; } };
-  const save = (s) => { try { sessionStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} };
-  let state = load(), token = 0, timer = null, spotEl = null, follow = null;
-  const loggedIn = document.body.dataset.auth === "1";
+  const spot = $("#tour-spot"), cap = $("#tour-caption");
+  let target = null, follow = null;
 
-  const spot = $("#tour-spot"), cap = $("#tour-caption"), bar = $("#tour-controls");
-  const playLabel = $("#tour-play-label"), progress = $("#tour-progress-bar");
-
-  function paint() {
-    const on = !!state.active;
-    document.body.classList.toggle("touring", on);
-    bar.hidden = !on; $("#tour-start").hidden = on;
-    if (!on) { spot.hidden = cap.hidden = true; return; }
-    $("#tour-count").textContent = `${state.i + 1} / ${STEPS.length}`;
-    playLabel.textContent = state.paused ? "▶ Play" : "⏸ Pause";
-    TM.$$("#tour-speed button").forEach((b) => b.classList.toggle("on", b.dataset.speed === TM.speedName()));
+  /* ---------- caption + spotlight placement ---------- */
+  function bounds() {
+    const bar = $("#player").getBoundingClientRect();
+    return { top: 12, bottom: bar.top - 14, gap: 14 };
   }
-
+  function scrollFor(el) {                         // put element (+ room for the caption) in the free area
+    const b = bounds(), r = el.getBoundingClientRect(), ch = cap.offsetHeight + b.gap, usable = b.bottom - b.top;
+    const desired = r.height + ch <= usable ? b.top + (usable - r.height - ch) / 2 : b.top + 6;
+    window.scrollBy({ top: r.top - desired, behavior: "auto" });
+  }
   function place() {
-    if (!spotEl || !document.body.contains(spotEl)) return;
-    const r = spotEl.getBoundingClientRect(), pad = 8;
-    const top = Math.max(4, r.top - pad), height = Math.min(r.height + pad * 2, innerHeight - top - 150);
-    Object.assign(spot.style, { left: r.left - pad + "px", top: top + "px", width: r.width + pad * 2 + "px", height: Math.max(40, height) + "px" });
-  }
-  function spotlight(el) {
-    spotEl = el; spot.hidden = !el;
-    if (!el) return;
-    el.scrollIntoView({ behavior: TM.reducedMotion ? "auto" : "smooth", block: "center" });
-    place();
-    clearInterval(follow); follow = setInterval(place, 150);   // follows the element as answers grow / page scrolls
-  }
-
-  function animateProgress(ms) {
-    progress.style.transition = "none"; progress.style.width = "0";
-    if (!ms) return;
-    requestAnimationFrame(() => requestAnimationFrame(() => { progress.style.transition = `width ${ms}ms linear`; progress.style.width = "100%"; }));
-  }
-
-  async function navigate(step) {
-    save(state);
-    if (step.anon && loggedIn) {                       // the login step needs a signed-out session
-      await TM.api("/auth/logout", { method: "POST" });
-      location.href = step.page; return;
+    const b = bounds(), W = innerWidth, clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    cap.style.width = "";                                          // default width (CSS), measured below
+    let cw = cap.offsetWidth, ch = cap.offsetHeight;
+    if (!target || !document.body.contains(target)) {
+      spot.hidden = true;
+      Object.assign(cap.style, { left: (W - cw) / 2 + "px", top: b.bottom - ch + "px" });
+      return;
     }
-    if (!step.anon && !loggedIn) {                     // sign in with the demo account through the real form
-      const form = $("#login-form");
-      if (form) {
-        if (!form.elements.username.value) await TM.fillDemo();
-        form.submit(); return;
-      }
-    }
-    document.body.classList.add("leaving");
-    setTimeout(() => (location.href = step.page), 150);
+    const r = target.getBoundingClientRect(), pad = 6;
+    const sTop = clamp(r.top - pad, b.top - pad, b.bottom), sBot = clamp(r.bottom + pad, b.top, b.bottom);
+    spot.hidden = sBot - sTop < 8;
+    Object.assign(spot.style, { left: r.left - pad + "px", top: sTop + "px", width: r.width + pad * 2 + "px", height: sBot - sTop + "px" });
+    let top, left = null;
+    const side = (space) => {                                      // narrow the card to fit beside the target
+      cap.style.width = Math.min(cw, space) + "px"; ch = cap.offsetHeight;
+      return clamp(r.top, b.top, b.bottom - ch);
+    };
+    const rightSpace = W - r.right - pad - 2 * b.gap, leftSpace = r.left - pad - 2 * b.gap;
+    if (b.bottom - r.bottom - pad >= ch + b.gap) top = r.bottom + pad + b.gap;               // below
+    else if (r.top - pad - b.top >= ch + b.gap) top = r.top - pad - b.gap - ch;              // above
+    else if (Math.max(rightSpace, leftSpace) >= 220) {                                         // beside (right, else left)
+      if (rightSpace >= leftSpace) { top = side(rightSpace); left = r.right + pad + b.gap; }
+      else { top = side(leftSpace); left = r.left - pad - b.gap - Math.min(cw, leftSpace); }
+    } else top = b.top;                                                                        // tiny screens only
+    if (left == null) left = clamp(r.left, 12, W - cap.offsetWidth - 12);
+    Object.assign(cap.style, { left: left + "px", top: Math.min(top, b.bottom - ch) + "px" });
   }
-
-  async function show(i) {
-    clearTimeout(timer);
-    const my = ++token;
-    state.i = Math.max(0, Math.min(STEPS.length - 1, i));
-    save(state); paint();
-    const step = STEPS[state.i];
-    if (location.pathname !== step.page) { cap.hidden = spot.hidden = true; return navigate(step); }
-
+  function show(step, i) {
     $("#tour-req").textContent = step.req;
     $("#tour-text").textContent = step.text;
-    cap.hidden = false; cap.style.animation = "none"; void cap.offsetWidth; cap.style.animation = "";
-    animateProgress(0);
-    spotlight(await waitFor(step.el, 2500) || (step.fallbackEl && $(step.fallbackEl)));
-    if (my !== token) return;
-    if (step.run) {
-      await wait(TM.speed().stagger * 3);
-      try { await step.run(); } catch (e) { console.warn("tour step failed", e); }
-      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();   // keep Space/arrows for the tour
-      if (my !== token) return;
-      spotlight($(step.el) || (step.fallbackEl && $(step.fallbackEl)));
-    }
-    scheduleNext(my);
+    $("#tour-cap-step").textContent = `${i + 1} / ${STEPS.length}`;
+    cap.hidden = false;
+    target = $(step.el);
+    if (target) scrollFor(target);
+    place();
+    clearInterval(follow); follow = setInterval(place, 120);   // follows answers that grow, resizes, scrolling
   }
 
-  function scheduleNext(my) {
-    clearTimeout(timer);
-    if (state.paused || my !== token) { animateProgress(0); return; }
-    const step = STEPS[state.i];
-    const ms = step.ai ? TM.speed().aiDwell : TM.speed().step;
-    animateProgress(ms);
-    timer = setTimeout(() => { if (my === token) next(); }, ms);
+  /* ---------- navigation between pages ---------- */
+  async function go(step, i, noAction) {
+    TM.store.set(KEY, { active: true, done: i + 1, pendingRun: true, noAction: !!noAction, playing: P.playing });
+    cap.hidden = true; spot.hidden = true;
+    if (step.anon && loggedIn) {                                 // the login step needs a signed-out session
+      await TM.api("/auth/logout", { method: "POST" });
+      location.href = step.page;
+    } else if (!step.anon && !loggedIn && $("#login-form")) {    // sign in with the demo account through the real form
+      if (!$("#login-form").elements.username.value) await TM.fillDemo(false);
+      $("#login-form").submit();
+    } else location.href = step.page;
+    await new Promise(() => {});                                 // page is unloading
   }
 
-  function next() { if (state.i >= STEPS.length - 1) return exit(true); show(state.i + 1); }
-  function back() { show(state.i - 1); }
-  function start() { state = { active: true, i: 0, paused: false }; save(state); show(0); }
-  function exit(done) {
-    clearTimeout(timer); clearInterval(follow); token++;
-    state = {}; save(state); spotEl = null; paint();
-    if (done === true) TM.toast("Tour complete", "Every production feature was demonstrated live.", "success");
+  const seq = {
+    title: "Guided Tour",
+    steps: STEPS.map((step, i) => ({
+      dwell: step.dwell,
+      async run(P, opts) {
+        if (location.pathname !== step.page) return go(step, i, opts.noAction);
+        TM.store.set(KEY, { active: true, done: i + 1, playing: P.playing });
+        show(step, i);
+        await P.wait(TM.speed().stagger * 2);
+        if (step.action && !opts.noAction) {
+          try { await step.action(); } catch (e) { console.warn("tour action failed", e); }
+          if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+          target = $(step.el); place();
+        }
+      },
+    })),
+    back(index) {                                    // show the previous step again (without redoing its action)
+      if (index < 0) return;
+      const step = STEPS[index];
+      P.done = index + 1; P.render();
+      if (location.pathname !== step.page) go(step, index, true);
+      else { TM.store.set(KEY, { active: true, done: index + 1 }); show(step, index); }
+    },
+    onEnd() { TM.toast("Tour complete", "Every production feature was shown live. Press Exit tour to close.", "success"); },
+  };
+
+  function start() {
+    P.setMode("manual");
+    TM.tourActive = true;
+    P.load(seq);
+    P.runAt(0);
   }
-  function togglePause() {
-    state.paused = !state.paused; save(state); paint();
-    if (state.paused) { clearTimeout(timer); animateProgress(0); } else scheduleNext(token);
+  function exit() {
+    TM.tourActive = false;
+    TM.store.set(KEY, null);
+    clearInterval(follow); target = null;
+    cap.hidden = true; spot.hidden = true;
+    P.load(P.pageSeq || null);
   }
 
   TM.$$("[data-tour-start]").forEach((b) => b.addEventListener("click", start));
-  $("#tour-next").addEventListener("click", next);
-  $("#tour-back").addEventListener("click", back);
-  $("#tour-play").addEventListener("click", togglePause);
   $("#tour-exit").addEventListener("click", exit);
-  TM.$$("#tour-speed button").forEach((b) => b.addEventListener("click", () => { TM.setSpeed(b.dataset.speed); paint(); if (!state.paused) scheduleNext(token); }));
-  document.addEventListener("keydown", (e) => {
-    if (!state.active || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
-    if (e.code === "Space") { e.preventDefault(); togglePause(); }
-    else if (e.key === "ArrowRight") next();
-    else if (e.key === "ArrowLeft") back();
-  });
-  addEventListener("resize", place);
+  $("#pl-exit").addEventListener("click", exit);
+  addEventListener("resize", () => TM.tourActive && place());
+  TM.tour = { start, exit, steps: STEPS };
 
-  paint();
-  if (state.active) setTimeout(() => show(state.i || 0), 250);   // resume after navigation
-  TM.tour = { start, next, back, exit, togglePause, steps: STEPS };
+  // ---- resume after navigation (page scripts below register their helpers first) ----
+  const state = TM.store.get(KEY, null);
+  if (state && state.active) {
+    TM.tourActive = true;
+    P.load(seq);
+    const idx = Math.max(0, (state.done || 1) - 1);
+    P.done = idx;
+    if (state.playing && P.mode === "auto") P.playing = true;
+    window.addEventListener("load", () => P.runAt(idx, { noAction: !state.pendingRun || state.noAction }));
+  }
 })();

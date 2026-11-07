@@ -5,10 +5,10 @@
 {% block subheading %}Your TripMind activity, computed live from the SQLite database.{% endblock %}
 {% block content %}
 <section class="stats" id="stats">
-  <div class="stat card lift"><span class="stat-icon blue">{{ icon('message') }}</span><div><small>Questions asked</small><b data-count="{{ stats.total }}">0</b></div></div>
-  <div class="stat card lift"><span class="stat-icon green">{{ icon('check') }}</span><div><small>Answered</small><b data-count="{{ stats.answered }}">0</b></div></div>
-  <div class="stat card lift"><span class="stat-icon amber">{{ icon('search') }}</span><div><small>Not in documents</small><b data-count="{{ stats.not_found }}">0</b></div></div>
-  <div class="stat card lift"><span class="stat-icon indigo">{{ icon('clock') }}</span><div><small>Avg response time</small><b data-count="{{ stats.avg_s }}" data-decimals="2" data-suffix=" s">0</b></div></div>
+  <div class="stat card lift"><span class="stat-icon blue">{{ icon('message') }}</span><div><small>Questions asked</small><b data-count="{{ stats.total }}">{{ stats.total }}</b></div></div>
+  <div class="stat card lift"><span class="stat-icon green">{{ icon('check') }}</span><div><small>Answered</small><b data-count="{{ stats.answered }}">{{ stats.answered }}</b></div></div>
+  <div class="stat card lift"><span class="stat-icon amber">{{ icon('search') }}</span><div><small>Not in documents</small><b data-count="{{ stats.not_found }}">{{ stats.not_found }}</b></div></div>
+  <div class="stat card lift"><span class="stat-icon indigo">{{ icon('clock') }}</span><div><small>Avg response time</small><b data-count="{{ stats.avg_s }}" data-decimals="2" data-suffix=" s">{{ '%.2f'|format(stats.avg_s) }} s</b></div></div>
 </section>
 
 <section class="grid-2">
@@ -16,7 +16,7 @@
     <div class="card-head"><h3>{{ icon('dashboard') }}Answer outcomes</h3><span class="muted small">{{ stats.blocked }} blocked by the guard</span></div>
     <div class="chart-box"><canvas id="status-chart" aria-label="Answer outcomes chart"></canvas></div>
   </div>
-  <div class="card">
+  <div class="card" id="latency-card">
     <div class="card-head"><h3>{{ icon('clock') }}Response time (last 10)</h3><span class="muted small">seconds, CPU model</span></div>
     <div class="chart-box"><canvas id="latency-chart" aria-label="Response time chart"></canvas></div>
   </div>

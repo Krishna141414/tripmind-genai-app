@@ -35,14 +35,14 @@
       <a href="{{ url_for('main.how_page') }}" class="{{ 'active' if ep == 'main.how_page' }}" id="nav-how">{{ icon('layers') }}How it works</a>
     </nav>
     <div class="sidebar-foot">
-      <div class="provider-pill" title="LLM_PROVIDER from .env">{{ icon('zap') }}LLM: {{ llm_provider }}</div>
+      <div class="provider-pill">{{ icon('zap') }}LLM: {{ llm_provider }}</div>
       {% if current_user.is_authenticated %}
       <div class="user-chip">
         <span class="avatar">{{ current_user.username[:1]|upper }}</span>
         <span class="user-meta"><b>{{ current_user.username }}</b><small>{{ 'Admin' if current_user.is_admin else 'Member' }}</small></span>
         <form method="post" action="{{ url_for('auth.logout') }}" id="logout-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="icon-btn" title="Sign out" aria-label="Sign out">{{ icon('logout') }}</button>
+          <button class="icon-btn" aria-label="Sign out">{{ icon('logout') }}</button>
         </form>
       </div>
       {% endif %}
@@ -68,7 +68,7 @@
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div id="flashes" hidden>{% for cat, msg in get_flashed_messages(with_categories=true) %}<span data-cat="{{ cat }}">{{ msg }}</span>{% endfor %}</div>
-{% include "_tour.html" %}
+{% include "_player.html" %}
 {% block pre_scripts %}{% endblock %}
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 <script src="{{ url_for('static', filename='js/tour.js') }}"></script>

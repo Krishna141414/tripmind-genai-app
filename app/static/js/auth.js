@@ -42,11 +42,23 @@
     if (!ok) { e.preventDefault(); TM.toast("Check the form", "Some fields need attention.", "error"); }
   });
 
-  const demo = TM.$("#demo-btn");
-  TM.fillDemo = async function () {
-    await TM.typeInto(form.elements.username, "demo");
-    await TM.typeInto(form.elements.password, "Demo@1234");
+  /** Fill demo / Demo@1234. typed=true types it out (pausable, used by demos); otherwise instant. */
+  TM.fillDemo = async function (typed) {
+    const u = form.elements.username, p = form.elements.password;
+    if (typed) { await TM.typeInto(u, "demo"); await TM.typeInto(p, "Demo@1234"); }
+    else { u.value = "demo"; p.value = "Demo@1234"; }
     names.forEach(check);
   };
-  if (demo) demo.addEventListener("click", TM.fillDemo);
+  const demo = TM.$("#demo-btn");
+  if (demo) demo.addEventListener("click", () => TM.fillDemo(false));
+
+  // Login page demo for the control bar: nothing happens until Next / Play.
+  if (mode === "login") {
+    const clearField = (n) => () => { form.elements[n].value = ""; setErr(n, ""); form.elements[n].classList.remove("valid"); TM.focusEl(null); };
+    TM.player.setPageSeq({ title: "Login demo", steps: [
+      { title: "Type username", run: async () => { TM.focusEl(form.elements.username); await TM.typeInto(form.elements.username, "demo"); check("username"); }, undo: clearField("username"), focus: () => TM.focusEl(form.elements.username) },
+      { title: "Type password", run: async () => { TM.focusEl(form.elements.password); await TM.typeInto(form.elements.password, "Demo@1234"); check("password"); }, undo: clearField("password"), focus: () => TM.focusEl(form.elements.password) },
+      { title: "Sign in", run: async () => { TM.focusEl(TM.$("#login-submit")); await TM.player.wait(TM.speed().stagger * 3); form.requestSubmit(); } },
+    ] });
+  }
 })();

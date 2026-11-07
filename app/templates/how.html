@@ -8,28 +8,29 @@
   <div class="card-head"><h3>{{ icon('layers') }}Architecture</h3><span class="muted small">Flask app factory + blueprints</span></div>
   <div class="arch">
     <div class="arch-col">
-      <div class="node">{{ icon('user') }}<b>Browser</b><small>Jinja pages + vanilla JS</small></div>
-      <div class="node">{{ icon('code') }}<b>API client</b><small>curl · X-API-Key</small></div>
+      <div class="node" data-flow="1">{{ icon('user') }}<b>Browser</b><small>Jinja pages + vanilla JS</small></div>
+      <div class="node" data-flow="1">{{ icon('code') }}<b>API client</b><small>curl · X-API-Key</small></div>
     </div>
     <div class="arch-arrow">{{ icon('arrow-right') }}</div>
     <div class="arch-col wide">
-      <div class="node layer"><b>Security layer</b><small>CSRF · rate limit · auth · headers · request-id logging</small></div>
-      <div class="node-row">
+      <div class="node layer" data-flow="2"><b>Security layer</b><small>CSRF · rate limit · auth · headers · request-id logging</small></div>
+      <div class="node-row" data-flow="3">
         <div class="node">auth/</div><div class="node">main/</div><div class="node">api/</div><div class="node">admin/</div>
       </div>
-      <div class="node accent">{{ icon('check') }}<b>ask_flow.py</b><small>validate → guard → RAG → save</small></div>
+      <div class="node accent" data-flow="4">{{ icon('check') }}<b>ask_flow.py</b><small>validate → guard → RAG → save</small></div>
     </div>
     <div class="arch-arrow">{{ icon('arrow-right') }}</div>
     <div class="arch-col">
-      <div class="node accent">{{ icon('sparkles') }}<b>rag_service.py</b><small>timeout + extractive fallback</small></div>
-      <div class="node">{{ icon('search') }}<b>rag_pipeline.py</b><small>MiniLM · FAISS · Qwen2.5-0.5B</small></div>
+      <div class="node accent" data-flow="5">{{ icon('sparkles') }}<b>rag_service.py</b><small>timeout + extractive fallback</small></div>
+      <div class="node" data-flow="6">{{ icon('search') }}<b>rag_pipeline.py</b><small>MiniLM · FAISS · Qwen2.5-0.5B</small></div>
     </div>
     <div class="arch-arrow">{{ icon('arrow-right') }}</div>
     <div class="arch-col">
-      <div class="node">{{ icon('database') }}<b>SQLite</b><small>User · Conversation · ApiKey</small></div>
-      <div class="node">{{ icon('logs') }}<b>logs/app.log</b><small>JSON lines</small></div>
+      <div class="node" data-flow="7">{{ icon('database') }}<b>SQLite</b><small>User · Conversation · ApiKey</small></div>
+      <div class="node" data-flow="7">{{ icon('logs') }}<b>logs/app.log</b><small>JSON lines</small></div>
     </div>
   </div>
+  <p class="flow-note" id="flow-note">Press <b>Next ⏭</b> to follow one question through the system, one hop at a time.</p>
 </section>
 
 <section class="card">
@@ -70,3 +71,4 @@ else:
 db.session.add(Conversation(...))           # persisted</pre></div>
 </section>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/how.js') }}"></script>{% endblock %}
